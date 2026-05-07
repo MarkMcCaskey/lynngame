@@ -1,0 +1,76 @@
+.drop-next-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  color: #776e65;
+}
+.drop-next {
+  width: 48px;
+  height: 48px;
+}
+.drop-next .drop-cell {
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+}
+
+.drop-board {
+  --cols: 5;
+  --rows: 7;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  gap: 4px;
+  width: 100%;
+}
+
+.drop-col {
+  display: grid;
+  grid-template-rows: repeat(var(--rows), 1fr);
+  gap: 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 6px;
+  transition: background 80ms ease;
+}
+.drop-col:not(.is-full):active,
+.drop-col:not(.is-full):hover {
+  background: rgba(255,255,255,0.05);
+}
+.drop-col.is-full { cursor: default; opacity: 0.85; }
+
+.drop-cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: rgba(238, 228, 218, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: #776e65;
+  font-size: 22px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.drop-cell.empty { background: rgba(238, 228, 218, 0.2); color: transparent; }
+
+.drop-cell.tile-2     { background: #eee4da; }
+.drop-cell.tile-4     { background: #ede0c8; }
+.drop-cell.tile-8     { background: #f2b179; color: #f9f6f2; }
+.drop-cell.tile-16    { background: #f59563; color: #f9f6f2; }
+.drop-cell.tile-32    { background: #f67c5f; color: #f9f6f2; }
+.drop-cell.tile-64    { background: #f65e3b; color: #f9f6f2; }
+.drop-cell.tile-128   { background: #edcf72; color: #f9f6f2; font-size: 20px; }
+.drop-cell.tile-256   { background: #edcc61; color: #f9f6f2; font-size: 20px; }
+.drop-cell.tile-512   { background: #edc850; color: #f9f6f2; font-size: 20px; }
+.drop-cell.tile-1024  { background: #edc53f; color: #f9f6f2; font-size: 17px; }
+.drop-cell.tile-2048  { background: #edc22e; color: #f9f6f2; font-size: 17px; }
+.drop-cell.tile-super { background: #3c3a32; color: #f9f6f2; font-size: 14px; }
+
+@media screen and (max-width: 520px) {
+  .drop-cell { font-size: 18px; }
+  .drop-cell.tile-128, .drop-cell.tile-256, .drop-cell.tile-512 { font-size: 16px; }
+  .drop-cell.tile-1024, .drop-cell.tile-2048 { font-size: 13px; }
+}

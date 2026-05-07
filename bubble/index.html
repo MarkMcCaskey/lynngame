@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Bubble Tap</title>
+  <link href="../shared/style/main.css" rel="stylesheet" type="text/css">
+  <link href="style/bubble.css" rel="stylesheet" type="text/css">
+  <link rel="shortcut icon" href="../favicon.ico">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../meta/apple-touch-icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bubble Tap">
+  <meta name="theme-color" content="#faf8ef">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+</head>
+<body>
+  <div class="container">
+    <div class="heading">
+      <h1 class="title">Bubble</h1>
+      <div class="scores-container">
+        <div class="score-container">0</div>
+        <div class="best-container">0</div>
+      </div>
+    </div>
+
+    <div class="above-game">
+      <div class="action-row">
+        <a class="restart-button">New Game</a>
+        <a class="undo-button" aria-label="Undo">&#9664; Undo</a>
+        <a class="redo-button" aria-label="Redo">Redo &#9654;</a>
+        <a class="settings-button" aria-label="Settings" title="Settings">&#9881;</a>
+      </div>
+      <div class="score-history-strip is-hidden"></div>
+    </div>
+
+    <div class="game-container">
+      <div class="game-message">
+        <p></p>
+        <div class="lower">
+          <a class="retry-button">Try again</a>
+        </div>
+      </div>
+      <div class="bubble-board"></div>
+    </div>
+
+    <p class="game-explanation">
+      <strong class="important">How to play:</strong> Tap a group of <strong>two or more</strong> same-color bubbles to pop them. Bigger groups score way more (a group of 5 = 20, a group of 10 = 90). Clear the whole board for a +500 bonus.
+    </p>
+    <hr>
+    <p style="font-size: 13px; opacity: 0.7;"><a href="../">&#8592; Back to games</a></p>
+  </div>
+
+  <div class="settings-panel" role="dialog" aria-label="Settings">
+    <div class="settings-card">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <a class="settings-close" aria-label="Close settings">&times;</a>
+      </div>
+
+      <label class="settings-row">
+        <span class="settings-label">Undo depth</span>
+        <select class="settings-undo-depth">
+          <option value="5">5 moves</option>
+          <option value="10">10 moves</option>
+          <option value="25">25 moves</option>
+          <option value="50">50 moves</option>
+          <option value="0">Unlimited</option>
+        </select>
+      </label>
+
+      <label class="settings-row">
+        <span class="settings-label">Haptic feedback on pops</span>
+        <input type="checkbox" class="settings-haptics">
+      </label>
+
+      <label class="settings-row">
+        <span class="settings-label">Show score history</span>
+        <input type="checkbox" class="settings-history">
+      </label>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Recent scores</div>
+        <ul class="settings-history-list"></ul>
+        <a class="settings-clear-history">Clear history</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="../shared/js/bind_polyfill.js"></script>
+  <script src="../shared/js/classlist_polyfill.js"></script>
+  <script src="../shared/js/animframe_polyfill.js"></script>
+  <script src="../shared/js/idb_mirror.js"></script>
+  <script src="../shared/js/settings.js"></script>
+  <script src="../shared/js/haptics.js"></script>
+  <script src="../shared/js/score_history.js"></script>
+  <script src="../shared/js/local_storage_manager.js"></script>
+  <script src="../shared/js/input_manager.js"></script>
+  <script src="../shared/js/base_actuator.js"></script>
+  <script src="../shared/js/base_game.js"></script>
+  <script src="../shared/js/settings_panel.js"></script>
+  <script src="js/bubble_game.js"></script>
+  <script src="js/bubble_actuator.js"></script>
+  <script src="js/application.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("../service-worker.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>

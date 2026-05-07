@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Lynn's games</title>
+  <link href="shared/style/main.css" rel="stylesheet" type="text/css">
+  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="meta/apple-touch-icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Lynn's games">
+  <meta name="theme-color" content="#faf8ef">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+</head>
+<body>
+  <div class="container">
+    <div class="heading">
+      <h1 class="title">Hi Lynn</h1>
+    </div>
+
+    <p>Pick a game.</p>
+
+    <nav class="launcher">
+      <a class="launcher-tile bubble" href="bubble/">
+        <h3>Bubble Tap</h3>
+        <p>Tap groups of same-colored bubbles to pop them. Bigger groups score more. Clear the board for a bonus.</p>
+      </a>
+      <a class="launcher-tile drop" href="drop/">
+        <h3>Drop &amp; Merge</h3>
+        <p>Drop numbers into columns. Same numbers stacked together merge upward. Don't overflow.</p>
+      </a>
+      <a class="launcher-tile flood" href="flood/">
+        <h3>Color Flood</h3>
+        <p>Tap a color to grow your top-left region. Paint the whole board in as few moves as you can.</p>
+      </a>
+    </nav>
+
+    <hr>
+    <p style="font-size: 13px; opacity: 0.7;">Three relaxing games. Each remembers your scores and supports undo.</p>
+  </div>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("service-worker.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>
