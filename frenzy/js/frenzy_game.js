@@ -99,15 +99,16 @@ FrenzyGame.prototype._configuredRunMs = function () {
 };
 
 FrenzyGame.prototype._xpForLevel = function (level) {
-  // XP needed to reach the *next* level. Geometric (1.6x per level) so
-  // each level requires meaningfully more cells than the last:
-  //   L1->L2:   80    L2->L3:  128    L3->L4:  205    L4->L5:  328
-  //   L5->L6:  524    L6->L7:  839    L7->L8: 1343    L8->L9: 2148
-  // Cumulative: 80, 208, 413, 741, 1265, 2104, 3447, 5595
-  // First chest is genuinely earned (~30s of decent play) and late-run
-  // levels are rare — the player gets to *use* their perks instead of
-  // constantly being interrupted by another chest reveal.
-  return Math.round(80 * Math.pow(1.6, level - 1));
+  // XP needed to reach the *next* level. Geometric (1.7x per level) on
+  // a base of 120 so chests are properly rare:
+  //   L1->L2:  120    L2->L3:  204    L3->L4:  347    L4->L5:  590
+  //   L5->L6: 1003    L6->L7: 1706    L7->L8: 2900    L8->L9: 4930
+  // Cumulative: 120, 324, 671, 1261, 2264, 3970, 6870, 11800
+  // A 4-min run with active play absorbs ~600-1500 cells, which lands
+  // in the L3-L5 range — typically 3-4 chests per run rather than the
+  // old curve's 5-8. Each chest now feels earned and the player has
+  // time to actually use the perks they pick up.
+  return Math.round(120 * Math.pow(1.7, level - 1));
 };
 
 FrenzyGame.prototype.newGame = function () {

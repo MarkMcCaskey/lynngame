@@ -19,6 +19,7 @@ function FrenzyActuator() {
   this.scratchBtn     = document.querySelector(".scratch-card-button");
   this.scratchCountEl = document.querySelector(".scratch-count");
   this.containerEl    = document.querySelector(".frenzy-container");
+  this.gameContainerEl = document.querySelector(".frenzy-game-container");
 
   this.lastScore = 0;
   this.onCellTap   = null;
@@ -89,6 +90,10 @@ FrenzyActuator.prototype.updateCombo = function (combo, multiplier) {
     this.comboEl.textContent = "x1";
     this.comboEl.classList.remove("hot", "blazing");
     if (this.comboBarFill) this.comboBarFill.style.width = "0%";
+    // Drop persistent rim glow when combo dies.
+    if (this.gameContainerEl) {
+      this.gameContainerEl.classList.remove("combo-active", "combo-hot", "combo-blazing");
+    }
     return;
   }
   // Casino flair: tier label by combo size.
@@ -183,20 +188,56 @@ FrenzyActuator.prototype.afterPick = function (info) {
     this._spawnPopup("+" + info.gain, cx, cy, info.bigPick ? "popup-big" : "popup-normal");
   }
 
-  // Special call-outs.
-  if (info.bigPick) {
+  // Tiered call-outs by absorption size. The bigger the pick the more
+  // the screen earns it: small "BIG!" → MEGA stamp + chip rain →
+  // MASSIVE earthquake + heavier rain. Each tier subsumes the smaller
+  // ones so we don't double-stack banners.
+  if (info.absorbed.length >= 25) {
+    this._spawnMegaStamp("MASSIVE", 1800);
+    this._shakeBoard("shake-lg");
+    this._spawnChipRain(20, info.gain);
+  } else if (info.absorbed.length >= 15) {
+    this._spawnMegaStamp("MEGA", 1500);
+    this._shakeBoard("shake-lg");
+    this._spawnChipRain(12, info.gain);
+  } else if (info.bigPick) {
     this._spawnBanner("BIG!", 600);
     this._shakeBoard("shake-md");
   }
-  if (info.combo === 5)  this._spawnBanner("COMBO 5", 600);
-  if (info.combo === 10) this._spawnBanner("ON FIRE", 800);
-  if (info.combo === 20) { this._spawnBanner("LEGENDARY", 1000); this._shakeBoard("shake-lg"); }
+
+  // Combo milestones get progressively heavier reactions.
+  if (info.combo === 5)  this._spawnBanner("COMBO 5", 700);
+  if (info.combo === 10) {
+    this._spawnBanner("ON FIRE", 900);
+    this._spawnChipRain(8, Math.round(info.gain * 0.5));
+  }
+  if (info.combo === 15) {
+    this._spawnMegaStamp("UNSTOPPABLE", 1300);
+    this._spawnChipRain(10, Math.round(info.gain * 0.6));
+  }
+  if (info.combo === 20) {
+    this._spawnMegaStamp("LEGENDARY", 1800);
+    this._shakeBoard("shake-lg");
+    this._spawnChipRain(16, info.gain);
+  }
   if (info.rainbow) this._spawnBanner("RAINBOW", 900);
+
+  // Persistent rim glow on the game container while combo is high. The
+  // class tier (combo-active / combo-hot / combo-blazing) drives a CSS
+  // animation so the screen breathes between picks, not just on the
+  // pick itself. Removed in updateCombo when combo decays to 0.
+  if (this.gameContainerEl) {
+    this.gameContainerEl.classList.remove("combo-active", "combo-hot", "combo-blazing");
+    if (info.combo >= 20)      this.gameContainerEl.classList.add("combo-blazing");
+    else if (info.combo >= 10) this.gameContainerEl.classList.add("combo-hot");
+    else if (info.combo >= 5)  this.gameContainerEl.classList.add("combo-active");
+  }
 
   if (info.bountyHits && info.bountyHits.length) {
     var totalBountyGain = info.bountyHits.reduce(function (a, b) { return a + b.gain; }, 0);
     this._spawnBanner("BOUNTY +" + totalBountyGain, 900);
     this._shakeBoard("shake-md");
+    this._spawnChipRain(6, totalBountyGain);
   }
 
   // Picker glow on the chosen color.
@@ -242,6 +283,48 @@ FrenzyActuator.prototype._spawnBanner = function (text, durationMs) {
   el.addEventListener("animationend", function () {
     if (el.parentNode) el.parentNode.removeChild(el);
   });
+};
+
+// Mega stamp: a slower, bigger banner for huge plays. Distinct from
+// the regular _spawnBanner so the keyframe can hold longer.
+FrenzyActuator.prototype._spawnMegaStamp = function (text, durationMs) {
+  if (!this.fxEl) return;
+  var el = document.createElement("div");
+  el.className = "mega-stamp";
+  el.textContent = text;
+  el.style.animationDuration = (durationMs || 1500) + "ms";
+  this.fxEl.appendChild(el);
+  el.addEventListener("animationend", function () {
+    if (el.parentNode) el.parentNode.removeChild(el);
+  });
+};
+
+// Chip rain: a shower of "+N" chips falling down across the play area.
+// Each chip is a DOM element with a randomized horizontal drift,
+// stagger delay, and rotation, animated entirely via CSS keyframes.
+FrenzyActuator.prototype._spawnChipRain = function (count, totalGain) {
+  if (!this.fxEl) return;
+  var rect = this.fxEl.getBoundingClientRect();
+  var width = rect.width;
+  var height = rect.height;
+  var perChip = Math.max(1, Math.round(totalGain / count));
+  for (var i = 0; i < count; i++) {
+    var chip = document.createElement("div");
+    chip.className = "score-chip";
+    // Slight value variation so the chips don't all read the same.
+    var v = Math.round(perChip * (0.7 + Math.random() * 0.6));
+    chip.textContent = "+" + v;
+    chip.style.left = (Math.random() * width) + "px";
+    chip.style.top  = "-20px";
+    chip.style.animationDelay = (Math.random() * 250) + "ms";
+    chip.style.setProperty("--chip-dy",  (height + 60) + "px");
+    chip.style.setProperty("--chip-dx",  ((Math.random() - 0.5) * 80) + "px");
+    chip.style.setProperty("--chip-rot", ((Math.random() - 0.5) * 720) + "deg");
+    this.fxEl.appendChild(chip);
+    chip.addEventListener("animationend", function (e) {
+      if (e.target.parentNode) e.target.parentNode.removeChild(e.target);
+    });
+  }
 };
 
 FrenzyActuator.prototype._shakeBoard = function (cls) {
@@ -641,13 +724,16 @@ FrenzyActuator.prototype.showScratchCard = function (symbols, reward, onClaim) {
   // From here on we erase pixels with destination-out for a real scratch feel.
   ctx.globalCompositeOperation = "destination-out";
 
-  // Smaller radius + higher threshold = each scratch reveals less and the
-  // player has to actually clean off most of the surface before the result
-  // shows up. The user wants this to feel weighty.
+  // Scratch tuning. The radius controls how much each stroke clears
+  // visually; the threshold is a real fraction of *cleared pixels* on
+  // the canvas, not a stroke-area estimate. The earlier version
+  // approximated revealed area from the stroke length × radius, which
+  // double-counted overlapping strokes — that's why the card was
+  // revealing after ~20% of visible silver was actually gone. Here we
+  // sample the actual canvas alpha periodically so the reveal really
+  // requires the player to clean off most of the silver.
   var radius = 11;
-  var revealedPx = 0;
-  var totalPx = W * H;
-  var threshold = 0.72;
+  var threshold = 0.65;
   var revealed = false;
 
   function pointerPos(e) {
@@ -661,25 +747,45 @@ FrenzyActuator.prototype.showScratchCard = function (symbols, reward, onClaim) {
   function scratchAt(p, prev) {
     ctx.beginPath();
     if (prev) {
-      // Draw a thick line from prev to p so fast drags don't leave gaps.
       ctx.lineCap = "round";
       ctx.lineWidth = radius * 2;
       ctx.moveTo(prev.x, prev.y);
       ctx.lineTo(p.x, p.y);
       ctx.stroke();
-      var dx = p.x - prev.x, dy = p.y - prev.y;
-      var len = Math.sqrt(dx * dx + dy * dy);
-      revealedPx += Math.min(len, 50) * radius * 2; // approximate
     } else {
       ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
       ctx.fill();
-      revealedPx += Math.PI * radius * radius;
-    }
-    if (!revealed && revealedPx > totalPx * threshold) {
-      revealed = true;
-      finishReveal();
     }
   }
+
+  // Sample the actual canvas alpha at a 12x12 grid of points to compute
+  // the true fraction cleared. We sample on a timer (every 200ms) instead
+  // of every stroke so the cost (~144 1px reads) doesn't show up on the
+  // input path. The drawing buffer is at canvas.width/height which is
+  // CSS-size * devicePixelRatio, so we sample those coords directly.
+  var aw = canvas.width;
+  var ah = canvas.height;
+  var sampleTimer = setInterval(function () {
+    if (revealed) { clearInterval(sampleTimer); return; }
+    var cleared = 0;
+    var samples = 0;
+    var GRID = 12;
+    for (var sy = 0; sy < GRID; sy++) {
+      for (var sx = 0; sx < GRID; sx++) {
+        var px = Math.floor((sx + 0.5) / GRID * aw);
+        var py = Math.floor((sy + 0.5) / GRID * ah);
+        var a;
+        try { a = ctx.getImageData(px, py, 1, 1).data[3]; } catch (e) { a = 255; }
+        if (a < 60) cleared++;
+        samples++;
+      }
+    }
+    if (cleared / samples > threshold) {
+      revealed = true;
+      clearInterval(sampleTimer);
+      finishReveal();
+    }
+  }, 200);
 
   function finishReveal() {
     // Fade out and clear the canvas — the symbols underneath show through.
@@ -730,6 +836,7 @@ FrenzyActuator.prototype.showScratchCard = function (symbols, reward, onClaim) {
 
   function close() {
     window.removeEventListener("mouseup", onUp);
+    clearInterval(sampleTimer);
     if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     if (onClaim) onClaim();
   }
