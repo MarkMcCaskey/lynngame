@@ -385,3 +385,16 @@ h1.title {
 .launcher-tile.bubble { background: #5b8def; }
 .launcher-tile.drop   { background: #edc22e; color: #776e65; }
 .launcher-tile.flood  { background: #6ed47e; color: #ffffff; }
+.launcher-tile.frenzy {
+  background: linear-gradient(135deg, #b066d3 0%, #5b8def 50%, #f5c542 100%);
+  color: #ffffff;
+  position: relative;
+  overflow: hidden;
+}
+.launcher-tile.frenzy::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 70% 30%, rgba(255,255,255,0.25), transparent 60%);
+  pointer-events: none;
+}

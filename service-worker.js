@@ -12,7 +12,7 @@
 //
 // Bump CACHE_VERSION on every deploy. The activate handler deletes any
 // older caches so storage doesn't grow.
-var CACHE_VERSION = "lynngame-v2";
+var CACHE_VERSION = "lynngame-v3";
 
 var APP_SHELL = [
   "./",
@@ -50,6 +50,11 @@ var APP_SHELL = [
   "flood/js/flood_game.js",
   "flood/js/flood_actuator.js",
   "flood/js/application.js",
+  "frenzy/index.html",
+  "frenzy/style/frenzy.css",
+  "frenzy/js/frenzy_game.js",
+  "frenzy/js/frenzy_actuator.js",
+  "frenzy/js/application.js",
   "meta/apple-touch-icon-180.png",
   "meta/icon-192.png",
   "meta/icon-512.png",

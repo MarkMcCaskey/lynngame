@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Frenzy</title>
+  <link href="../shared/style/main.css" rel="stylesheet" type="text/css">
+  <link href="style/frenzy.css" rel="stylesheet" type="text/css">
+  <link rel="shortcut icon" href="../favicon.ico">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="apple-touch-icon" href="../meta/apple-touch-icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Frenzy">
+  <meta name="theme-color" content="#1a1430">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+</head>
+<body class="frenzy-body">
+  <div class="frenzy-bg"></div>
+
+  <div class="container frenzy-container">
+    <div class="heading">
+      <h1 class="title frenzy-title">Frenzy</h1>
+      <div class="scores-container">
+        <div class="score-container">0</div>
+        <div class="best-container">0</div>
+      </div>
+    </div>
+
+    <div class="above-game">
+      <div class="action-row">
+        <a class="restart-button">New Run</a>
+        <a class="settings-button" aria-label="Settings" title="Settings">&#9881;</a>
+      </div>
+      <div class="score-history-strip is-hidden"></div>
+    </div>
+
+    <div class="frenzy-stats">
+      <div class="stat stat-timer">
+        <span class="stat-label">Time</span>
+        <span class="stat-value frenzy-timer">4:00</span>
+      </div>
+      <div class="stat stat-wave">
+        <span class="stat-label">Wave</span>
+        <span class="stat-value frenzy-wave">1</span>
+      </div>
+      <div class="stat stat-level">
+        <span class="stat-label">Lv</span>
+        <span class="stat-value frenzy-level">1</span>
+      </div>
+      <div class="stat stat-combo">
+        <span class="stat-label">Combo</span>
+        <span class="stat-value frenzy-combo">&times;1</span>
+      </div>
+    </div>
+
+    <div class="frenzy-bars">
+      <div class="xp-bar"><div class="xp-bar-fill"></div><span class="xp-bar-label">0 / 15</span></div>
+      <div class="combo-bar"><div class="combo-bar-fill"></div></div>
+    </div>
+
+    <a class="scratch-card-button is-hidden" aria-label="Open scratch card" title="Scratch card">
+      <span class="scratch-icon">SCRATCH</span>
+      <span class="scratch-count">0</span>
+    </a>
+
+    <div class="game-container frenzy-game-container">
+      <div class="game-message">
+        <p></p>
+        <div class="game-message-stats"></div>
+        <div class="lower">
+          <a class="retry-button">New run</a>
+        </div>
+      </div>
+      <div class="frenzy-board"></div>
+      <div class="frenzy-fx" aria-hidden="true"></div>
+    </div>
+
+    <div class="frenzy-picker"></div>
+
+    <p class="game-explanation" style="margin-top: 18px;">
+      <strong class="important">How to play:</strong> Same flood mechanic — tap a color to absorb everything connected to your center region. But here it's <strong>endless</strong>: clear the board to start a new wave with a bigger reward, chase combos for multiplier bonuses, and grab the <strong>glowing hot cells</strong> for a 5&times; payout. Edge tiles refresh on their own to keep things spicy.
+    </p>
+    <hr>
+    <p style="font-size: 13px; opacity: 0.7;"><a href="../">&#8592; Back to games</a></p>
+  </div>
+
+  <div class="settings-panel" role="dialog" aria-label="Settings">
+    <div class="settings-card">
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <a class="settings-close" aria-label="Close settings">&times;</a>
+      </div>
+
+      <label class="settings-row">
+        <span class="settings-label">Run length</span>
+        <select class="settings-run-length">
+          <option value="120">2 minutes</option>
+          <option value="240" selected>4 minutes</option>
+          <option value="360">6 minutes</option>
+          <option value="600">10 minutes</option>
+        </select>
+      </label>
+
+      <label class="settings-row">
+        <span class="settings-label">Haptic feedback</span>
+        <input type="checkbox" class="settings-haptics">
+      </label>
+
+      <label class="settings-row">
+        <span class="settings-label">Show score history</span>
+        <input type="checkbox" class="settings-history">
+      </label>
+
+      <label class="settings-row">
+        <span class="settings-label">Reduce motion</span>
+        <input type="checkbox" class="settings-reduce-motion">
+      </label>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Recent runs</div>
+        <ul class="settings-history-list"></ul>
+        <a class="settings-clear-history">Clear history</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="../shared/js/bind_polyfill.js"></script>
+  <script src="../shared/js/classlist_polyfill.js"></script>
+  <script src="../shared/js/animframe_polyfill.js"></script>
+  <script src="../shared/js/idb_mirror.js"></script>
+  <script src="../shared/js/settings.js"></script>
+  <script src="../shared/js/haptics.js"></script>
+  <script src="../shared/js/score_history.js"></script>
+  <script src="../shared/js/local_storage_manager.js"></script>
+  <script src="../shared/js/input_manager.js"></script>
+  <script src="../shared/js/base_actuator.js"></script>
+  <script src="../shared/js/settings_panel.js"></script>
+  <script src="js/frenzy_game.js"></script>
+  <script src="js/frenzy_actuator.js"></script>
+  <script src="js/application.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("../service-worker.js", { updateViaCache: "none" })
+          .then(function (reg) {
+            if (reg.waiting) reg.waiting.postMessage("skipWaiting");
+            reg.addEventListener("updatefound", function () {
+              var nw = reg.installing;
+              if (!nw) return;
+              nw.addEventListener("statechange", function () {
+                if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                  nw.postMessage("skipWaiting");
+                }
+              });
+            });
+            document.addEventListener("visibilitychange", function () {
+              if (document.visibilityState === "visible") reg.update().catch(function () {});
+            });
+          })
+          .catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>
