@@ -46,29 +46,30 @@ function FrenzyGame(opts) {
 // (skipping any that have hit maxLevel for this run). Effects are applied
 // inside pick() / tick() based on the current `state.perks` map.
 FrenzyGame.PERKS = [
-  { id: "magnet",  name: "Magnet",   icon: "M",  blurb: "+1 random matching cell per pick", maxLevel: 5 },
-  { id: "mult",    name: "Boost",    icon: "x",  blurb: "+50% score multiplier",             maxLevel: 4 },
-  { id: "aura",    name: "Aura",     icon: "*",  blurb: "Auto-absorbs an adjacent cell",     maxLevel: 3 },
-  { id: "combo",   name: "Combo+",   icon: "C",  blurb: "Combo grows faster",                maxLevel: 3 },
-  { id: "lucky",   name: "Lucky",    icon: "?",  blurb: "More hot cells, longer fuse",       maxLevel: 3 },
-  { id: "greed",   name: "Greed",    icon: "$",  blurb: "+1 base score per cell",            maxLevel: 5 },
-  { id: "heart",   name: "Heart",    icon: "+",  blurb: "+20s on the clock",                 maxLevel: 3 },
-  { id: "rainbow", name: "Rainbow",  icon: "R",  blurb: "Every 6th pick clears that color everywhere", maxLevel: 1 }
+  { id: "magnet",  name: "Magnet",   icon: "🧲", blurb: "+1 random matching cell per pick",         maxLevel: 5 }, // 🧲
+  { id: "mult",    name: "Boost",    icon: "💎", blurb: "+50% score multiplier",                    maxLevel: 4 }, // 💎
+  { id: "aura",    name: "Aura",     icon: "✨",       blurb: "Auto-absorbs an adjacent cell on a timer", maxLevel: 3 }, // ✨
+  { id: "combo",   name: "Combo+",   icon: "🔥", blurb: "Combo multiplier grows faster",            maxLevel: 3 }, // 🔥
+  { id: "lucky",   name: "Lucky",    icon: "🍀", blurb: "More hot cells, longer fuse",              maxLevel: 3 }, // 🍀
+  { id: "greed",   name: "Greed",    icon: "💰", blurb: "+1 base score per cell",                   maxLevel: 5 }, // 💰
+  { id: "heart",   name: "Heart",    icon: "⏱️", blurb: "+20s on the clock",                        maxLevel: 3 }, // ⏱️
+  { id: "rainbow", name: "Rainbow",  icon: "🌈", blurb: "Every 6th pick clears that color everywhere", maxLevel: 1 } // 🌈
 ];
 
-// Scratch-card reward pool. The `weight` field is its share of the
-// weighted random draw; entries are picked when the player scratches a
-// card. The `label` shows on the scratch card under the silver overlay.
-FrenzyGame.SCRATCH_REWARDS = [
-  { weight: 25, kind: "score", amount: 100,   label: "+100",      flair: "common" },
-  { weight: 20, kind: "score", amount: 250,   label: "+250",      flair: "common" },
-  { weight: 15, kind: "score", amount: 500,   label: "+500",      flair: "uncommon" },
-  { weight: 12, kind: "time",  amount: 15,    label: "+15s",      flair: "uncommon" },
-  { weight: 10, kind: "time",  amount: 30,    label: "+30s",      flair: "uncommon" },
-  { weight: 8,  kind: "score", amount: 1000,  label: "+1000",     flair: "rare"     },
-  { weight: 5,  kind: "perk",  label: "Free Perk",                flair: "rare"     },
-  { weight: 3,  kind: "wave",  label: "Wave Skip",                flair: "epic"     },
-  { weight: 2,  kind: "score", amount: 2500,  label: "JACKPOT",   flair: "jackpot"  }
+// Scratch-card symbol pool. A real card draws 9 of these into a 3x3 grid
+// (one per cell, each cell rolled independently) and the prize is
+// determined by the most-common symbol after the player scratches off
+// the silver. `base` is the prize amount when 3-of-a-kind hits;
+// 4-of-a-kind doubles, 5-of-a-kind triples, etc. 2-of-a-kind pays a
+// fraction. 0/1 matches falls back to a small consolation prize.
+FrenzyGame.SCRATCH_SYMBOLS = [
+  { id: "cherry",  icon: "🍒", weight: 28, base: 100,  kind: "score", flair: "common"   },
+  { id: "seven",   icon: "7️⃣", weight: 22, base: 250,  kind: "score", flair: "common"   },
+  { id: "gold",    icon: "💰", weight: 20, base: 500,  kind: "score", flair: "uncommon" },
+  { id: "star",    icon: "⭐", weight: 14, base: 1000, kind: "score", flair: "rare"     },
+  { id: "clock",   icon: "⏱️", weight: 6,  base: 30,   kind: "time",  flair: "rare"     },
+  { id: "gift",    icon: "🎁", weight: 6,  base: 1,    kind: "perk",  flair: "epic"     },
+  { id: "diamond", icon: "💎", weight: 4,  base: 2500, kind: "score", flair: "jackpot"  }
 ];
 
 FrenzyGame.prototype.boot = function () {
@@ -93,8 +94,15 @@ FrenzyGame.prototype._configuredRunMs = function () {
 };
 
 FrenzyGame.prototype._xpForLevel = function (level) {
-  // L1->L2: 15, L2->L3: 25, L3->L4: 35, ... grows linearly.
-  return 15 + (level - 1) * 10;
+  // XP needed to reach the *next* level. The original curve (15 + 10L)
+  // let a single 60-cell absorb cascade through 5 chests in the first
+  // 30 seconds, which was too interruptive. This curve spreads them out
+  // and grows faster:
+  //   L1->L2: 60, L2->L3: 100, L3->L4: 140, L4->L5: 180, L5->L6: 220 ...
+  // Cumulative thresholds: 60, 160, 300, 480, 700, 960, 1260 ...
+  // So in the first ~30s of play (~100 cells absorbed) the player sees
+  // at most one or two chests, and chests get rarer as the run goes on.
+  return 60 + (level - 1) * 40;
 };
 
 FrenzyGame.prototype.newGame = function () {
@@ -390,30 +398,88 @@ FrenzyGame.prototype.grantScratchCard = function () {
   this.actuator.flashScratchDrop();
 };
 
-// Pick a scratch reward weighted by SCRATCH_REWARDS[i].weight.
-FrenzyGame.prototype._rollScratchReward = function () {
-  var pool = FrenzyGame.SCRATCH_REWARDS;
+// Roll 9 symbols for a real scratch card (3x3 grid). Each cell is an
+// independent draw weighted by SCRATCH_SYMBOLS[i].weight.
+FrenzyGame.prototype._rollScratchSymbols = function () {
+  var pool = FrenzyGame.SCRATCH_SYMBOLS;
   var total = 0;
   for (var i = 0; i < pool.length; i++) total += pool[i].weight;
-  var roll = Math.random() * total;
-  var acc = 0;
-  for (var j = 0; j < pool.length; j++) {
-    acc += pool[j].weight;
-    if (roll < acc) return pool[j];
+  var grid = [];
+  for (var c = 0; c < 9; c++) {
+    var roll = Math.random() * total;
+    var acc = 0;
+    for (var j = 0; j < pool.length; j++) {
+      acc += pool[j].weight;
+      if (roll < acc) { grid.push(pool[j]); break; }
+    }
   }
-  return pool[pool.length - 1];
+  return grid;
+};
+
+// Score a scratch card from its 9 symbols. The most-common symbol wins:
+//   - 3+ of a kind: full reward, multiplied by (count - 2) so 3=1x, 4=2x ...
+//   - 2 of a kind:  fractional reward (30%)
+//   - 0/1 matches:  flat consolation (+50)
+// Ties on count broken by rarity (lowest weight wins).
+FrenzyGame.prototype._scoreScratch = function (symbols) {
+  var counts = {};
+  symbols.forEach(function (s) { counts[s.id] = (counts[s.id] || 0) + 1; });
+  var pool = FrenzyGame.SCRATCH_SYMBOLS;
+  var best = null;
+  pool.forEach(function (sym) {
+    var n = counts[sym.id] || 0;
+    if (!best ||
+        n > best.count ||
+        (n === best.count && sym.weight < best.sym.weight)) {
+      best = { sym: sym, count: n };
+    }
+  });
+
+  if (best.count >= 3) {
+    var mul = best.count - 2;
+    if (best.sym.kind === "score") {
+      return { kind: "score", amount: best.sym.base * mul,
+               label: "+" + (best.sym.base * mul),
+               matchSymbolId: best.sym.id, matchCount: best.count, flair: best.sym.flair };
+    }
+    if (best.sym.kind === "time") {
+      return { kind: "time", amount: best.sym.base * mul,
+               label: "+" + (best.sym.base * mul) + "s",
+               matchSymbolId: best.sym.id, matchCount: best.count, flair: best.sym.flair };
+    }
+    if (best.sym.kind === "perk") {
+      return { kind: "perk", label: "Free Perk",
+               matchSymbolId: best.sym.id, matchCount: best.count, flair: best.sym.flair };
+    }
+  }
+  if (best.count === 2) {
+    if (best.sym.kind === "score") {
+      var amt = Math.round(best.sym.base * 0.3);
+      return { kind: "score", amount: amt, label: "+" + amt,
+               matchSymbolId: best.sym.id, matchCount: 2, flair: "common" };
+    }
+    if (best.sym.kind === "time") {
+      var t = Math.max(5, Math.round(best.sym.base * 0.3));
+      return { kind: "time", amount: t, label: "+" + t + "s",
+               matchSymbolId: best.sym.id, matchCount: 2, flair: "common" };
+    }
+    // 2 perks pays a flat score consolation (free perk with N=2 felt
+    // too generous given how easy 2-of-a-kind is to roll).
+    return { kind: "score", amount: 100, label: "+100",
+             matchSymbolId: null, matchCount: 0, flair: "common" };
+  }
+  return { kind: "score", amount: 50, label: "+50",
+           matchSymbolId: null, matchCount: 0, flair: "common" };
 };
 
 FrenzyGame.prototype.openScratchCard = function () {
   if (this.state.scratchCards <= 0) return;
   if (this.state.paused) return;
   this.state.paused = true;
-  var reward = this._rollScratchReward();
+  var symbols = this._rollScratchSymbols();
+  var reward = this._scoreScratch(symbols);
   var self = this;
-  this.actuator.showScratchCard(reward, function () {
-    // Card revealed + claimed: resume first, then apply the reward. The
-    // "perk" reward chains into openFreeChest which sets paused=true again,
-    // so we have to drop paused before applying or the chest deadlocks.
+  this.actuator.showScratchCard(symbols, reward, function () {
     self.state.scratchCards -= 1;
     self.actuator.updateScratchCount(self.state.scratchCards);
     self.state.paused = false;

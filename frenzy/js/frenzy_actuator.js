@@ -509,72 +509,158 @@ FrenzyActuator.prototype.flashScratchDrop = function () {
   this.scratchBtn.classList.add("drop-flash");
 };
 
-FrenzyActuator.prototype.showScratchCard = function (reward, onClaim) {
+FrenzyActuator.prototype.showScratchCard = function (symbols, reward, onClaim) {
   var overlay = document.createElement("div");
-  overlay.className = "scratch-overlay";
-  overlay.innerHTML =
-    '<div class="scratch-card flair-' + reward.flair + '">' +
-      '<div class="scratch-card-prize">' + reward.label + '</div>' +
-      '<canvas class="scratch-canvas" width="320" height="200"></canvas>' +
-      '<div class="scratch-hint">Drag to scratch</div>' +
-      '<a class="scratch-claim is-hidden">Claim</a>' +
-    '</div>';
+  overlay.className = "scratch-overlay flair-" + reward.flair;
+  // Build the 3x3 grid of symbol cells, then a canvas overlay above
+  // them. The canvas is z-indexed above the grid so the silver hides
+  // the symbols until the player scratches it off.
+  var html = '<div class="scratch-card flair-' + reward.flair + '">' +
+             '  <div class="scratch-title">SCRATCH ALL 9</div>' +
+             '  <div class="scratch-grid">';
+  for (var i = 0; i < 9; i++) {
+    html += '<div class="scratch-cell" data-sym="' + symbols[i].id + '">' +
+              '<span class="scratch-cell-icon">' + symbols[i].icon + '</span>' +
+            '</div>';
+  }
+  html += '    <canvas class="scratch-canvas"></canvas>' +
+          '  </div>' +
+          '  <div class="scratch-result is-hidden">' +
+          '    <div class="scratch-result-line"></div>' +
+          '    <div class="scratch-result-prize"></div>' +
+          '    <a class="scratch-claim">Claim</a>' +
+          '  </div>' +
+          '  <div class="scratch-hint">Drag to scratch the silver off all 9 spots</div>' +
+          '</div>';
+  overlay.innerHTML = html;
   document.body.appendChild(overlay);
+
   var canvas = overlay.querySelector(".scratch-canvas");
+  var grid   = overlay.querySelector(".scratch-grid");
   var claim  = overlay.querySelector(".scratch-claim");
   var hint   = overlay.querySelector(".scratch-hint");
-  var ctx    = canvas.getContext("2d");
-  // Match canvas drawing buffer to its CSS size for a 1:1 pixel scratch.
-  var cssWidth  = canvas.clientWidth || 320;
-  var cssHeight = canvas.clientHeight || 200;
-  canvas.width = cssWidth;
-  canvas.height = cssHeight;
+  var resultEl = overlay.querySelector(".scratch-result");
+  var resultLine  = overlay.querySelector(".scratch-result-line");
+  var resultPrize = overlay.querySelector(".scratch-result-prize");
 
-  // Silver overlay with a "?" pattern.
-  var grad = ctx.createLinearGradient(0, 0, cssWidth, cssHeight);
+  // Wait for layout so we can size the canvas to the grid.
+  function sizeCanvas() {
+    var rect = grid.getBoundingClientRect();
+    var cssWidth  = Math.max(220, Math.round(rect.width));
+    var cssHeight = Math.max(220, Math.round(rect.height));
+    var ratio = window.devicePixelRatio || 1;
+    canvas.style.width  = cssWidth + "px";
+    canvas.style.height = cssHeight + "px";
+    canvas.width  = cssWidth  * ratio;
+    canvas.height = cssHeight * ratio;
+    var ctx = canvas.getContext("2d");
+    ctx.scale(ratio, ratio);
+    return { ctx: ctx, w: cssWidth, h: cssHeight, ratio: ratio };
+  }
+  var dim = sizeCanvas();
+  var ctx = dim.ctx;
+  var W = dim.w, H = dim.h;
+
+  // Paint the silver overlay with a subtle "S C R A T C H" texture.
+  var grad = ctx.createLinearGradient(0, 0, W, H);
   grad.addColorStop(0,    "#cfd2d8");
   grad.addColorStop(0.5,  "#f0f1f4");
   grad.addColorStop(1,    "#a9adb6");
   ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, cssWidth, cssHeight);
-  ctx.fillStyle = "rgba(80, 80, 100, 0.55)";
-  ctx.font = "bold 38px Helvetica, sans-serif";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(80, 80, 100, 0.42)";
+  ctx.font = "bold 26px Helvetica, sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText("S C R A T C H", cssWidth / 2, cssHeight / 2);
+  // Tile the word a few times for a busy texture.
+  for (var ty = 30; ty < H; ty += 60) {
+    for (var tx = 30; tx < W; tx += 130) {
+      ctx.fillText("SCRATCH", tx, ty);
+    }
+  }
 
+  // From here on we erase pixels with destination-out for a real scratch feel.
   ctx.globalCompositeOperation = "destination-out";
 
-  var scratched = false;
+  // Smaller radius + higher threshold = each scratch reveals less and the
+  // player has to actually clean off most of the surface before the result
+  // shows up. The user wants this to feel weighty.
+  var radius = 11;
   var revealedPx = 0;
-  var totalPx = cssWidth * cssHeight;
+  var totalPx = W * H;
+  var threshold = 0.72;
+  var revealed = false;
 
   function pointerPos(e) {
     var rect = canvas.getBoundingClientRect();
-    var sx = canvas.width / rect.width;
-    var sy = canvas.height / rect.height;
+    var sx = W / rect.width;
+    var sy = H / rect.height;
     var t = (e.touches && e.touches[0]) || e;
     return { x: (t.clientX - rect.left) * sx, y: (t.clientY - rect.top) * sy };
   }
 
-  function scratchAt(p) {
+  function scratchAt(p, prev) {
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 22, 0, Math.PI * 2);
-    ctx.fill();
-    revealedPx += Math.PI * 22 * 22; // approximate
-    scratched = true;
-    if (revealedPx > totalPx * 0.45) {
-      // Auto-clear the rest with a flourish.
-      ctx.fillRect(0, 0, cssWidth, cssHeight);
-      hint.classList.add("is-hidden");
-      claim.classList.remove("is-hidden");
+    if (prev) {
+      // Draw a thick line from prev to p so fast drags don't leave gaps.
+      ctx.lineCap = "round";
+      ctx.lineWidth = radius * 2;
+      ctx.moveTo(prev.x, prev.y);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      var dx = p.x - prev.x, dy = p.y - prev.y;
+      var len = Math.sqrt(dx * dx + dy * dy);
+      revealedPx += Math.min(len, 50) * radius * 2; // approximate
+    } else {
+      ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      revealedPx += Math.PI * radius * radius;
+    }
+    if (!revealed && revealedPx > totalPx * threshold) {
+      revealed = true;
+      finishReveal();
     }
   }
 
+  function finishReveal() {
+    // Fade out and clear the canvas — the symbols underneath show through.
+    canvas.classList.add("revealed");
+    setTimeout(function () { ctx.clearRect(0, 0, W, H); }, 320);
+
+    // Highlight matching cells if 2+ of a kind landed.
+    if (reward.matchSymbolId && reward.matchCount >= 2) {
+      var matches = grid.querySelectorAll('.scratch-cell[data-sym="' + reward.matchSymbolId + '"]');
+      matches.forEach(function (cell) { cell.classList.add("matched"); });
+    }
+
+    // Show the result row + claim button.
+    if (hint) hint.classList.add("is-hidden");
+    setTimeout(function () {
+      resultEl.classList.remove("is-hidden");
+      if (reward.matchCount >= 3) {
+        resultLine.textContent = reward.matchCount + "× " +
+          (FrenzyGame.SCRATCH_SYMBOLS.find(function (s) { return s.id === reward.matchSymbolId; }) || {}).icon +
+          "  MATCH!";
+      } else if (reward.matchCount === 2) {
+        resultLine.textContent = "Pair only — small prize";
+      } else {
+        resultLine.textContent = "No matches";
+      }
+      resultPrize.textContent = reward.label;
+    }, 480);
+  }
+
   var dragging = false;
-  function onDown(e) { dragging = true; scratchAt(pointerPos(e)); e.preventDefault(); }
-  function onMove(e) { if (dragging) { scratchAt(pointerPos(e)); e.preventDefault(); } }
-  function onUp(e)   { dragging = false; }
+  var prev = null;
+  function onDown(e) { dragging = true; prev = pointerPos(e); scratchAt(prev, null); e.preventDefault(); }
+  function onMove(e) {
+    if (!dragging) return;
+    var p = pointerPos(e);
+    scratchAt(p, prev);
+    prev = p;
+    e.preventDefault();
+  }
+  function onUp() { dragging = false; prev = null; }
 
   canvas.addEventListener("mousedown", onDown);
   canvas.addEventListener("mousemove", onMove);
@@ -584,6 +670,7 @@ FrenzyActuator.prototype.showScratchCard = function (reward, onClaim) {
   canvas.addEventListener("touchend",   onUp);
 
   function close() {
+    window.removeEventListener("mouseup", onUp);
     if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
     if (onClaim) onClaim();
   }

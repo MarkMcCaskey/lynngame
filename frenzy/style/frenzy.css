@@ -231,10 +231,21 @@
   /* Smooth color crossfade between picks. */
   transition: background-color 220ms ease, box-shadow 180ms ease;
 }
+/* The player's region needs to be unmistakable on a dark casino board
+   regardless of which of the six tile colors it currently is. Three
+   stacked layers do the work:
+   - 3px hard white inner ring (the visible border)
+   - 4px dark trim outside that to keep the white visible on bright tiles
+   - soft outer white glow so the region "blooms" away from non-region
+     cells around it
+   z-index lifts the cell above its neighbors so the glow isn't clipped
+   by the grid gap. */
 .frenzy-cell.in-region {
   box-shadow:
-    inset 0 0 0 2px rgba(255, 255, 255, 0.45),
-    inset 0 0 6px rgba(255, 255, 255, 0.2);
+    inset 0 0 0 3px rgba(255, 255, 255, 0.95),
+    inset 0 0 0 4px rgba(0, 0, 0, 0.5),
+    0 0 6px rgba(255, 255, 255, 0.45);
+  z-index: 1;
 }
 .frenzy-cell.is-start::after {
   content: "";
@@ -571,7 +582,7 @@
   position: fixed;
   inset: 0;
   z-index: 260;
-  background: rgba(15, 10, 30, 0.78);
+  background: rgba(15, 10, 30, 0.82);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   display: flex;
@@ -586,63 +597,132 @@
   padding: 18px;
   text-align: center;
   box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08);
-  max-width: 360px;
+  max-width: 340px;
   width: 100%;
   position: relative;
 }
-.scratch-card.flair-jackpot { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px #f5c542, 0 0 30px rgba(245,197,66,0.6); }
-.scratch-card.flair-epic    { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px #b066d3, 0 0 24px rgba(176,102,211,0.55); }
-.scratch-card.flair-rare    { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px #5b8def; }
 
-.scratch-card-prize {
+.scratch-title {
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0.65;
+  margin-bottom: 12px;
+  font-weight: bold;
+}
+
+/* The scratch grid is a 3x3 of symbol cells with the canvas absolute-
+   positioned ON TOP of them. The canvas is z-indexed above so the
+   silver hides the symbols until scratched off. (Earlier version had
+   the prize text rendered above the canvas which was the layering bug.) */
+.scratch-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 4px;
+  width: 100%;
+  aspect-ratio: 1;
+  background: rgba(255,255,255,0.04);
+  border-radius: 14px;
+  padding: 6px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.scratch-cell {
+  background: linear-gradient(160deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  position: relative;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.scratch-cell-icon {
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.45));
+}
+
+/* Matched cells get a glow + bounce when the silver clears. */
+@keyframes scratch-match-pulse {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(245, 197, 66, 0.6); }
+  50%      { transform: scale(1.12); box-shadow: 0 0 0 8px rgba(245, 197, 66, 0); }
+}
+.scratch-cell.matched {
+  background: linear-gradient(135deg, rgba(245,197,66,0.55), rgba(255,122,61,0.4));
+  border-color: rgba(255,200,0,0.85);
+  animation: scratch-match-pulse 900ms ease-in-out infinite;
+}
+
+.scratch-canvas {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  inset: 6px;
+  z-index: 5;
+  border-radius: 10px;
+  cursor: crosshair;
+  touch-action: none;
+  transition: opacity 320ms ease;
+}
+.scratch-canvas.revealed {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scratch-hint {
+  margin-top: 12px;
+  opacity: 0.65;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+}
+.scratch-hint.is-hidden { display: none; }
+
+.scratch-result {
+  margin-top: 12px;
+  animation: result-fade-in 360ms ease-out;
+}
+.scratch-result.is-hidden { display: none; }
+@keyframes result-fade-in {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.scratch-result-line {
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+.scratch-result-prize {
   font-size: 36px;
   font-weight: 900;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   background: linear-gradient(90deg, #f5c542, #ff7a3d);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  text-shadow: 0 0 20px rgba(255,200,0,0.6);
-  white-space: nowrap;
+  text-shadow: 0 0 20px rgba(255,200,0,0.5);
+  margin-bottom: 10px;
 }
-.scratch-card.flair-jackpot .scratch-card-prize {
+
+.scratch-overlay.flair-jackpot .scratch-card { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px #f5c542, 0 0 30px rgba(245,197,66,0.6); }
+.scratch-overlay.flair-epic    .scratch-card { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px #b066d3, 0 0 24px rgba(176,102,211,0.55); }
+.scratch-overlay.flair-rare    .scratch-card { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px #5b8def; }
+.scratch-overlay.flair-jackpot .scratch-result-prize {
   animation: jackpot-pulse 700ms ease-in-out infinite;
-  font-size: 42px;
+  font-size: 44px;
 }
 @keyframes jackpot-pulse {
-  0%, 100% { filter: brightness(1); transform: translate(-50%, -50%) scale(1); }
-  50%      { filter: brightness(1.5); transform: translate(-50%, -50%) scale(1.08); }
+  0%, 100% { filter: brightness(1);   transform: scale(1); }
+  50%      { filter: brightness(1.5); transform: scale(1.08); }
 }
-
-.scratch-canvas {
-  display: block;
-  width: 100%;
-  max-width: 320px;
-  height: 200px;
-  margin: 0 auto;
-  border-radius: 14px;
-  cursor: crosshair;
-  touch-action: none;
-}
-
-.scratch-hint {
-  margin-top: 8px;
-  opacity: 0.65;
-  font-size: 13px;
-  letter-spacing: 0.06em;
-}
-.scratch-hint.is-hidden { display: none; }
 
 .scratch-claim {
   display: inline-block;
-  margin-top: 10px;
   background: linear-gradient(135deg, #6ed47e, #4ba55a);
   color: white;
-  padding: 12px 22px;
+  padding: 12px 24px;
   border-radius: 10px;
   font-weight: bold;
   text-decoration: none;
@@ -650,7 +730,6 @@
   -webkit-tap-highlight-color: transparent;
   animation: claim-pulse 700ms ease-in-out infinite;
 }
-.scratch-claim.is-hidden { display: none; }
 @keyframes claim-pulse {
   0%, 100% { transform: scale(1);    box-shadow: 0 0 0 0 rgba(110,212,126,0.6); }
   50%      { transform: scale(1.05); box-shadow: 0 0 0 12px rgba(110,212,126,0); }
