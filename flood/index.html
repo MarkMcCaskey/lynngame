@@ -35,7 +35,8 @@
     </div>
 
     <div class="flood-status">
-      <span>Moves: <strong class="flood-moves">0</strong> <span class="flood-target">/ 25</span></span>
+      <span>Moves: <strong class="flood-moves">0</strong></span>
+      <span class="flood-par-wrap">par <strong class="flood-par">18</strong></span>
       <span>Pick a color &#8595;</span>
     </div>
 
@@ -52,7 +53,7 @@
     <div class="flood-picker"></div>
 
     <p class="game-explanation" style="margin-top: 20px;">
-      <strong class="important">How to play:</strong> The top-left tile and everything connected to it is your <strong>region</strong>. Tap a color to repaint your region in that color and absorb any matching neighbors. Paint the whole board in 25 moves or fewer.
+      <strong class="important">How to play:</strong> The center tile (with the white dot) is your <strong>region</strong>, plus everything connected to it. Tap a color to repaint your region and swallow any matching neighbors. Aim to paint the whole board in roughly <strong>par</strong> moves — there's no failing, just a bigger score for tighter games.
     </p>
     <hr>
     <p style="font-size: 13px; opacity: 0.7;"><a href="../">&#8592; Back to games</a></p>
@@ -112,7 +113,23 @@
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
-        navigator.serviceWorker.register("../service-worker.js").catch(function () {});
+        navigator.serviceWorker.register("../service-worker.js", { updateViaCache: "none" })
+          .then(function (reg) {
+            if (reg.waiting) reg.waiting.postMessage("skipWaiting");
+            reg.addEventListener("updatefound", function () {
+              var nw = reg.installing;
+              if (!nw) return;
+              nw.addEventListener("statechange", function () {
+                if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                  nw.postMessage("skipWaiting");
+                }
+              });
+            });
+            document.addEventListener("visibilitychange", function () {
+              if (document.visibilityState === "visible") reg.update().catch(function () {});
+            });
+          })
+          .catch(function () {});
       });
     }
   </script>

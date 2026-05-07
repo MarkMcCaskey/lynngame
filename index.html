@@ -41,9 +41,31 @@
   </div>
 
   <script>
+    // Register the service worker with updateViaCache: 'none' so the browser
+    // never serves a cached service-worker.js — every page load checks for a
+    // new SW byte-by-byte. Combined with stale-while-revalidate inside the
+    // SW, this means users see fresh content on the next reload after a
+    // deploy. If a new SW is found, kick it through skipWaiting so the
+    // following reload picks up the new bundle without hitting stale cache.
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", function () {
-        navigator.serviceWorker.register("service-worker.js").catch(function () {});
+        navigator.serviceWorker.register("service-worker.js", { updateViaCache: "none" })
+          .then(function (reg) {
+            if (reg.waiting) reg.waiting.postMessage("skipWaiting");
+            reg.addEventListener("updatefound", function () {
+              var nw = reg.installing;
+              if (!nw) return;
+              nw.addEventListener("statechange", function () {
+                if (nw.state === "installed" && navigator.serviceWorker.controller) {
+                  nw.postMessage("skipWaiting");
+                }
+              });
+            });
+            document.addEventListener("visibilitychange", function () {
+              if (document.visibilityState === "visible") reg.update().catch(function () {});
+            });
+          })
+          .catch(function () {});
       });
     }
   </script>

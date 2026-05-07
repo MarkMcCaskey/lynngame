@@ -5,11 +5,15 @@
   margin-bottom: 8px;
   font-size: 14px;
   color: #776e65;
+  gap: 8px;
 }
 .flood-status strong { font-size: 18px; }
+.flood-par-wrap { padding: 2px 8px; border-radius: 999px; transition: background 200ms ease; }
+.flood-par-wrap.under-par { background: rgba(110, 212, 126, 0.25); }
+.flood-par-wrap.over-par  { background: rgba(219, 77, 77, 0.18); }
 
 .flood-board {
-  --size: 14;
+  --size: 13;
   display: grid;
   grid-template-columns: repeat(var(--size), 1fr);
   gap: 1px;
@@ -21,6 +25,63 @@
 .flood-cell {
   aspect-ratio: 1;
   width: 100%;
+  position: relative;
+  /* Smooth color crossfade when a region repaints. The actuator reuses
+     cell elements between renders so this transition fires for every pick. */
+  transition: background-color 220ms ease, box-shadow 180ms ease;
+}
+
+/* Owned region: subtle inset glow so the player can see what's "theirs"
+   at a glance, especially before the region grows much. */
+.flood-cell.in-region {
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 255, 255, 0.45),
+    inset 0 0 6px rgba(255, 255, 255, 0.2);
+}
+
+/* Start cell marker: a small white dot in the center of the start cell so
+   the player can always see where their region originates, regardless of
+   what color the cell currently is. The dark drop-shadow keeps the dot
+   readable on light backgrounds (e.g. yellow). */
+.flood-cell.is-start::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 38%;
+  height: 38%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 0 0 1.5px rgba(0, 0, 0, 0.45),
+    0 0 4px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Just-joined: brief bloom when a cell newly joins the region. Strong
+   visual feedback that the spread "took". */
+@keyframes flood-joined {
+  0%   { transform: scale(0.6);  filter: brightness(1.7); }
+  55%  { transform: scale(1.08); filter: brightness(1.25); }
+  100% { transform: scale(1);    filter: brightness(1); }
+}
+.flood-cell.just-joined {
+  animation: flood-joined 320ms ease-out;
+  z-index: 1;
+}
+
+/* Win celebration: a wave radiates from the center to the edges. Each cell
+   gets its delay set inline (--cell-delay) based on Manhattan distance from
+   the start cell, so the pulse rolls outward instead of firing all at once. */
+@keyframes flood-celebrate {
+  0%   { transform: scale(1);    filter: brightness(1)  saturate(1); }
+  40%  { transform: scale(1.18); filter: brightness(1.4) saturate(1.5); }
+  100% { transform: scale(1);    filter: brightness(1)  saturate(1); }
+}
+.flood-board.celebrating .flood-cell {
+  animation: flood-celebrate 700ms ease-out var(--cell-delay, 0ms);
 }
 
 .flood-picker {
@@ -36,18 +97,23 @@
   border-radius: 8px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 100ms ease, box-shadow 100ms ease;
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
   outline: none;
   padding: 0;
   margin: 0;
+  position: relative;
 }
 .flood-color-btn.is-current {
-  box-shadow: inset 0 0 0 3px rgba(255,255,255,0.85), 0 0 0 2px rgba(0,0,0,0.15);
+  /* Current color is dimmed so it's obvious that picking it is a no-op,
+     but keeps an inner ring marker as a positive "this is you" signal. */
+  box-shadow: inset 0 0 0 3px rgba(255,255,255,0.85),
+              0 0 0 2px rgba(0,0,0,0.15);
   opacity: 0.5;
   cursor: default;
 }
 .flood-color-btn:active:not(.is-current) {
-  transform: scale(0.95);
+  transform: scale(0.9);
+  filter: brightness(1.2);
 }
 
 /* Six color palette — picked for high contrast and shape-blind safety. */

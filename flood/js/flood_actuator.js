@@ -3,45 +3,101 @@ function FloodActuator() {
   this.boardEl = document.querySelector(".flood-board");
   this.pickerEl = document.querySelector(".flood-picker");
   this.movesEl = document.querySelector(".flood-moves");
-  this.targetEl = document.querySelector(".flood-target");
+  this.parEl = document.querySelector(".flood-par");
+  this.parWrap = document.querySelector(".flood-par-wrap");
   this.onColorPick = null;
   this._bound = false;
   this._pickerBuilt = false;
+  this._prevRegion = null;
+  this._cells = null;
+  this._lastSize = 0;
 }
 FloodActuator.prototype = Object.create(BaseActuator.prototype);
 FloodActuator.prototype.constructor = FloodActuator;
 
-FloodActuator.prototype.renderBoard = function (state, size, currentColor, colorCount, target) {
+FloodActuator.prototype.renderBoard = function (state, size, currentColor,
+                                                 colorCount, par, start, region) {
   this.buildPicker(colorCount);
   this.markCurrentColor(currentColor);
 
   if (this.movesEl) this.movesEl.textContent = state.moves;
-  if (this.targetEl) this.targetEl.textContent = "/ " + target;
+  if (this.parEl)   this.parEl.textContent = par;
+  if (this.parWrap) {
+    var diff = state.moves - par;
+    this.parWrap.classList.toggle("over-par",  diff > 0);
+    this.parWrap.classList.toggle("under-par", state.moves > 0 && diff <= 0);
+  }
 
   if (!this.boardEl) return;
   this.boardEl.style.setProperty("--size", size);
 
-  // Reuse cells across renders to keep DOM churn down — there are 196 cells.
-  var existing = this.boardEl.querySelectorAll(".flood-cell");
-  if (existing.length !== size * size) {
+  // Reuse cell elements between renders so CSS transitions apply on the
+  // background-color change. Tearing down the DOM each time would defeat
+  // the smooth color crossfade we want for juice.
+  if (this._lastSize !== size || !this._cells) {
     while (this.boardEl.firstChild) this.boardEl.removeChild(this.boardEl.firstChild);
-    for (var i = 0; i < size * size; i++) {
-      var c = document.createElement("div");
-      c.className = "flood-cell";
-      this.boardEl.appendChild(c);
+    this._cells = [];
+    var startKey = start.x + "," + start.y;
+    for (var y = 0; y < size; y++) {
+      for (var x = 0; x < size; x++) {
+        var cellEl = document.createElement("div");
+        cellEl.className = "flood-cell";
+        // Distance from center used to stagger the win-celebration wave.
+        var dist = Math.abs(x - start.x) + Math.abs(y - start.y);
+        cellEl.style.setProperty("--cell-delay", (dist * 35) + "ms");
+        if ((x + "," + y) === startKey) cellEl.classList.add("is-start");
+        cellEl.dataset.x = x;
+        cellEl.dataset.y = y;
+        this.boardEl.appendChild(cellEl);
+        this._cells.push(cellEl);
+      }
     }
-    existing = this.boardEl.querySelectorAll(".flood-cell");
+    this._lastSize = size;
+    this._prevRegion = null; // Force a fresh diff on next render
   }
 
-  for (var y = 0; y < size; y++) {
-    for (var x = 0; x < size; x++) {
-      var idx = y * size + x;
-      var cell = existing[idx];
-      var v = state.cells[x][y];
-      // Strip existing color-N classes, set the new one
-      cell.className = "flood-cell color-" + v;
+  // Build a set of keys "x,y" for O(1) "is this cell in the current region"
+  // lookups during the per-cell update below.
+  var inRegion = {};
+  for (var i = 0; i < region.length; i++) {
+    inRegion[region[i][0] + "," + region[i][1]] = true;
+  }
+
+  // Diff against the previous region so newly-joined cells get a "pop" animation.
+  var newlyJoined = {};
+  if (this._prevRegion) {
+    for (var key in inRegion) {
+      if (!this._prevRegion[key]) newlyJoined[key] = true;
     }
   }
+
+  // Update each cell's class. We avoid re-creating the DOM so the
+  // transition: background-color animates the color change.
+  for (var yy = 0; yy < size; yy++) {
+    for (var xx = 0; xx < size; xx++) {
+      var idx = yy * size + xx;
+      var cell = this._cells[idx];
+      var v = state.cells[xx][yy];
+      var k = xx + "," + yy;
+      var classes = "flood-cell color-" + v;
+      if (inRegion[k])    classes += " in-region";
+      if (newlyJoined[k]) classes += " just-joined";
+      if (xx === start.x && yy === start.y) classes += " is-start";
+      cell.className = classes;
+    }
+  }
+
+  // Strip the .just-joined class after the animation finishes so a re-render
+  // (e.g. from undo) replays it cleanly when those cells re-join the region.
+  if (Object.keys(newlyJoined).length) {
+    setTimeout(function (cells) {
+      cells.forEach(function (c) { c.classList.remove("just-joined"); });
+    }, 360, this._cells);
+  }
+
+  this._prevRegion = inRegion;
+
+  this.boardEl.classList.toggle("celebrating", !!state.won);
 };
 
 FloodActuator.prototype.buildPicker = function (colorCount) {
@@ -73,4 +129,9 @@ FloodActuator.prototype.markCurrentColor = function (color) {
   for (var i = 0; i < btns.length; i++) {
     btns[i].classList.toggle("is-current", i === color);
   }
+};
+
+FloodActuator.prototype.continueGame = function () {
+  BaseActuator.prototype.continueGame.call(this);
+  if (this.boardEl) this.boardEl.classList.remove("celebrating");
 };
