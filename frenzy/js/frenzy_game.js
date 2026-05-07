@@ -36,6 +36,11 @@ function FrenzyGame(opts) {
   this.churnCount     = 2;
   this.comboTimeoutMs = 2000;
   this.auraBaseMs     = 4000;
+  this.bountySpawnMinMs = 7000;
+  this.bountySpawnMaxMs = 11000;
+  this.bountyTurnsMin   = 5;
+  this.bountyTurnsMax   = 8;
+  this.bountyPayout     = 500;
 
   var self = this;
   this.inputManager.on("restart", function () { self.restart(); });
@@ -120,8 +125,10 @@ FrenzyGame.prototype.newGame = function () {
     wave: 1,
     timeLeftMs: this.runDurationMs,
     hotCells: {},
+    bounties: {},
     nextChurnMs: 1500,
     nextHotMs: 3500,
+    nextBountyMs: 6000,
     ended: false,
     totalAbsorbed: 0,
     maxCombo: 0,
@@ -219,6 +226,17 @@ FrenzyGame.prototype.tick = function (dtMs, nowMs) {
       delete this.state.hotCells[k];
       this.actuator.unmarkHot(k);
     }
+  }
+
+  // Bounty cells: special targets with a turn counter (not a time
+  // counter — they only tick down when the player makes a pick, so the
+  // turn budget is real and forces route planning). Spawn periodically,
+  // capped at 2 active at once. Counter decrements happen inside pick().
+  this.state.nextBountyMs -= dtMs;
+  if (this.state.nextBountyMs <= 0) {
+    this.state.nextBountyMs = this.bountySpawnMinMs +
+                              Math.random() * (this.bountySpawnMaxMs - this.bountySpawnMinMs);
+    if (Object.keys(this.state.bounties).length < 2) this.spawnBounty();
   }
 
   // Aura perk: every N seconds (shorter at higher level), absorb one
@@ -328,10 +346,20 @@ FrenzyGame.prototype.pick = function (color) {
   magnetExtras.forEach(pushAbsorbed);
   rainbowExtras.forEach(pushAbsorbed);
 
-  // Combo
-  this.state.combo += 1;
-  this.state.comboTimerMs = this.comboTimeoutMs;
-  if (this.state.combo > this.state.maxCombo) this.state.maxCombo = this.state.combo;
+  // Combo: only grows on substantive absorbs (>= 3 cells). Small picks
+  // (1-2 cells) hold combo where it is and reset the decay timer so the
+  // player doesn't lose what they have, but they don't get the multiplier
+  // bump for free. Wasted picks (0 cells absorbed) let combo decay
+  // naturally — punishes mashing colors that don't connect to the
+  // region. This is the anti-mash rule that gives the player a reason
+  // to read the board before each tap.
+  if (absorbed.length >= 3) {
+    this.state.combo += 1;
+    this.state.comboTimerMs = this.comboTimeoutMs;
+    if (this.state.combo > this.state.maxCombo) this.state.maxCombo = this.state.combo;
+  } else if (absorbed.length > 0) {
+    this.state.comboTimerMs = this.comboTimeoutMs;
+  }
 
   var comboLvl  = this.state.perks.combo || 0;
   var multLvl   = this.state.perks.mult  || 0;
@@ -341,6 +369,13 @@ FrenzyGame.prototype.pick = function (color) {
   var comboMul    = 1 + (this.state.combo - 1) * comboStep;
   var multBonus   = 1 + 0.5 * multLvl;
   var basePerCell = this.basePerCell + greedLvl;
+
+  // Build a set of absorbed cell keys so we can match against hots and
+  // bounties in O(1).
+  var absorbedSet = {};
+  for (var ai = 0; ai < absorbed.length; ai++) {
+    absorbedSet[absorbed[ai][0] + "," + absorbed[ai][1]] = true;
+  }
 
   var hots = this.state.hotCells;
   var hotsHit = [];
@@ -360,6 +395,34 @@ FrenzyGame.prototype.pick = function (color) {
   this.state.score += gain;
   this.state.totalAbsorbed += absorbed.length;
 
+  // Bounty cells: every pick decrements every active bounty's turn
+  // counter. If the absorbed set contains a bounty cell, pay it out
+  // (flat amount, scaled by combo/mult so combos still matter). If a
+  // bounty's counter hits 0 without being grabbed, it just expires. The
+  // turn-based counter (rather than time-based) is what makes bounties
+  // a real planning decision: a player who's mashing burns turns and
+  // misses the bonus.
+  var bountyHits = [];
+  var bountyKeys = Object.keys(this.state.bounties);
+  for (var bi = 0; bi < bountyKeys.length; bi++) {
+    var bk = bountyKeys[bi];
+    var b  = this.state.bounties[bk];
+    b.turnsLeft -= 1;
+    if (absorbedSet[bk]) {
+      var bountyGain = Math.round(this.bountyPayout * comboMul * multBonus);
+      this.state.score += bountyGain;
+      gain += bountyGain;
+      bountyHits.push({ key: bk, gain: bountyGain });
+      delete this.state.bounties[bk];
+      this.actuator.unmarkBounty(bk);
+    } else if (b.turnsLeft <= 0) {
+      delete this.state.bounties[bk];
+      this.actuator.unmarkBounty(bk);
+    } else {
+      this.actuator.updateBountyTurns(bk, b.turnsLeft);
+    }
+  }
+
   this.haptics.pulse(absorbed.length > 8 ? 18 : (absorbed.length > 2 ? 12 : 8));
 
   this.actuator.afterPick({
@@ -369,6 +432,7 @@ FrenzyGame.prototype.pick = function (color) {
     combo: this.state.combo,
     multiplier: comboMul * multBonus,
     hotsHit: hotsHit,
+    bountyHits: bountyHits,
     bigPick: absorbed.length >= 8,
     rainbow: rainbowFired,
     magnetExtras: magnetExtras,
@@ -623,6 +687,10 @@ FrenzyGame.prototype.completeWave = function () {
     delete this.state.hotCells[k];
     this.actuator.unmarkHot(k);
   }
+  for (var bk in this.state.bounties) {
+    delete this.state.bounties[bk];
+    this.actuator.unmarkBounty(bk);
+  }
 
   this.actuator.celebrateWave(this.state.wave, bonus);
   this.actuator.renderBoard(this.state, this.size, this.startCell, this.region());
@@ -658,6 +726,28 @@ FrenzyGame.prototype.churnEdges = function () {
   }
 };
 
+FrenzyGame.prototype.spawnBounty = function () {
+  // Pick a random non-region, non-hot, non-bounty cell.
+  var regionSet = {};
+  this.region().forEach(function (p) { regionSet[p[0] + "," + p[1]] = true; });
+  var candidates = [];
+  for (var x = 0; x < this.size; x++) {
+    for (var y = 0; y < this.size; y++) {
+      var k = x + "," + y;
+      if (regionSet[k]) continue;
+      if (this.state.hotCells[k]) continue;
+      if (this.state.bounties[k]) continue;
+      candidates.push([x, y, k]);
+    }
+  }
+  if (!candidates.length) return;
+  var p = candidates[Math.floor(Math.random() * candidates.length)];
+  var turns = this.bountyTurnsMin +
+              Math.floor(Math.random() * (this.bountyTurnsMax - this.bountyTurnsMin + 1));
+  this.state.bounties[p[2]] = { turnsLeft: turns, payout: this.bountyPayout };
+  this.actuator.markBounty(p[0], p[1], turns);
+};
+
 FrenzyGame.prototype.spawnHot = function (nowMs, luckyLvl) {
   var regionSet = {};
   this.region().forEach(function (p) { regionSet[p[0] + "," + p[1]] = true; });
@@ -667,6 +757,7 @@ FrenzyGame.prototype.spawnHot = function (nowMs, luckyLvl) {
       var k = x + "," + y;
       if (regionSet[k]) continue;
       if (this.state.hotCells[k]) continue;
+      if (this.state.bounties[k]) continue; // don't double up with a bounty
       candidates.push([x, y, k]);
     }
   }
@@ -704,10 +795,11 @@ FrenzyGame.prototype.triggerAura = function () {
   this.state.cells[pick[0]][pick[1]] = color;
   this.state.totalAbsorbed += 1;
 
-  // Aura kicks combo too. It's a free pick.
-  this.state.combo += 1;
-  this.state.comboTimerMs = this.comboTimeoutMs;
-  if (this.state.combo > this.state.maxCombo) this.state.maxCombo = this.state.combo;
+  // Aura is a free single-cell pick — it keeps the combo alive (timer
+  // reset) but doesn't grow it. Otherwise an aura ticking in the
+  // background would pump combo for free, defeating the anti-mash rule
+  // that combo only grows on substantive player picks.
+  if (this.state.combo > 0) this.state.comboTimerMs = this.comboTimeoutMs;
 
   var comboStep = 0.2 + 0.1 * (this.state.perks.combo || 0);
   var comboMul = 1 + (this.state.combo - 1) * comboStep;

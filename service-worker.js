@@ -12,7 +12,7 @@
 //
 // Bump CACHE_VERSION on every deploy. The activate handler deletes any
 // older caches so storage doesn't grow.
-var CACHE_VERSION = "lynngame-v4";
+var CACHE_VERSION = "lynngame-v5";
 
 var APP_SHELL = [
   "./",

@@ -300,6 +300,68 @@
   50%      { transform: scale(1.18); opacity: 0.5; }
 }
 
+/* Bounty cells: turn-based bonus targets. Distinct from hot cells (which
+   use a fire palette and time out). Bounties use a gold/cyan palette
+   and show a turn counter badge in the corner so the player knows
+   exactly how many picks they have left to grab them. The badge is a
+   child .bounty-badge so we can animate ticks separately from the
+   cell's own state changes. */
+@keyframes bounty-pulse {
+  0%, 100% { box-shadow: inset 0 0 0 2px rgba(180, 220, 255, 0.95), 0 0 8px rgba(120, 180, 255, 0.6); }
+  50%      { box-shadow: inset 0 0 0 2px rgba(255, 220, 120, 1.0),  0 0 14px rgba(255, 200, 60, 0.85); }
+}
+.frenzy-cell.is-bounty {
+  animation: bounty-pulse 1.1s ease-in-out infinite;
+  z-index: 3;
+}
+.frenzy-cell.is-bounty::before {
+  /* A small star-like cross in the cell so it reads as a "target" even
+     before the player notices the badge. */
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50%;
+  height: 50%;
+  transform: translate(-50%, -50%) rotate(0deg);
+  background:
+    linear-gradient(0deg, transparent 45%, rgba(255,255,255,0.95) 45% 55%, transparent 55%),
+    linear-gradient(90deg, transparent 45%, rgba(255,255,255,0.95) 45% 55%, transparent 55%);
+  filter: drop-shadow(0 0 4px rgba(255,200,60,0.8));
+  pointer-events: none;
+  animation: bounty-spin 4s linear infinite;
+}
+@keyframes bounty-spin { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+
+.bounty-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: #f5c542;
+  color: #1a1430;
+  font-size: 10px;
+  font-weight: bold;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 6px rgba(255, 200, 0, 0.8);
+  z-index: 4;
+  pointer-events: none;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  line-height: 1;
+}
+@keyframes bounty-tick {
+  0%   { transform: scale(1.6); background: #ff7a3d; }
+  100% { transform: scale(1);   background: #f5c542; }
+}
+.bounty-badge.bounty-tick {
+  animation: bounty-tick 220ms ease-out;
+}
+
 /* Edge-churn flash: a quick burst when a cell rerolls. */
 @keyframes frenzy-churn {
   0%   { box-shadow: 0 0 0 6px rgba(255,255,255,0.7), inset 0 0 8px rgba(255,255,255,0.6); }

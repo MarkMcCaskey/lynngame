@@ -193,6 +193,12 @@ FrenzyActuator.prototype.afterPick = function (info) {
   if (info.combo === 20) { this._spawnBanner("LEGENDARY", 1000); this._shakeBoard("shake-lg"); }
   if (info.rainbow) this._spawnBanner("RAINBOW", 900);
 
+  if (info.bountyHits && info.bountyHits.length) {
+    var totalBountyGain = info.bountyHits.reduce(function (a, b) { return a + b.gain; }, 0);
+    this._spawnBanner("BOUNTY +" + totalBountyGain, 900);
+    this._shakeBoard("shake-md");
+  }
+
   // Picker glow on the chosen color.
   this._pulsePicker(picked);
 };
@@ -273,6 +279,59 @@ FrenzyActuator.prototype.unmarkHot = function (key) {
   var idx = (+xy[1]) * size + (+xy[0]);
   var cell = this._cells[idx];
   if (cell) cell.classList.remove("is-hot");
+};
+
+// --------------------------------------------------- bounty cells
+
+FrenzyActuator.prototype.markBounty = function (x, y, turns) {
+  var size = this._lastSize;
+  if (!size) return;
+  var idx = y * size + x;
+  var cell = this._cells[idx];
+  if (!cell) return;
+  cell.classList.add("is-bounty");
+  cell.dataset.bountyTurns = turns;
+  // Spawn a small badge child element (so we can position the number
+  // independently and animate it). We re-use this child if it already
+  // exists, but renderBoard will recreate cells so it should be fresh.
+  if (!cell.querySelector(".bounty-badge")) {
+    var badge = document.createElement("div");
+    badge.className = "bounty-badge";
+    cell.appendChild(badge);
+  }
+  cell.querySelector(".bounty-badge").textContent = turns;
+};
+
+FrenzyActuator.prototype.updateBountyTurns = function (key, turns) {
+  var xy = key.split(",");
+  var size = this._lastSize;
+  if (!size) return;
+  var idx = (+xy[1]) * size + (+xy[0]);
+  var cell = this._cells[idx];
+  if (!cell) return;
+  cell.dataset.bountyTurns = turns;
+  var badge = cell.querySelector(".bounty-badge");
+  if (badge) {
+    badge.textContent = turns;
+    // Brief tick animation on every decrement so the player sees the
+    // counter is actually counting down.
+    badge.classList.remove("bounty-tick");
+    void badge.offsetWidth;
+    badge.classList.add("bounty-tick");
+  }
+};
+
+FrenzyActuator.prototype.unmarkBounty = function (key) {
+  var xy = key.split(",");
+  var size = this._lastSize;
+  if (!size) return;
+  var idx = (+xy[1]) * size + (+xy[0]);
+  var cell = this._cells[idx];
+  if (!cell) return;
+  cell.classList.remove("is-bounty");
+  delete cell.dataset.bountyTurns;
+  var badge = cell.querySelector(".bounty-badge");
+  if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
 };
 
 FrenzyActuator.prototype.churnCell = function (x, y, color) {
