@@ -99,15 +99,15 @@ FrenzyGame.prototype._configuredRunMs = function () {
 };
 
 FrenzyGame.prototype._xpForLevel = function (level) {
-  // XP needed to reach the *next* level. The original curve (15 + 10L)
-  // let a single 60-cell absorb cascade through 5 chests in the first
-  // 30 seconds, which was too interruptive. This curve spreads them out
-  // and grows faster:
-  //   L1->L2: 60, L2->L3: 100, L3->L4: 140, L4->L5: 180, L5->L6: 220 ...
-  // Cumulative thresholds: 60, 160, 300, 480, 700, 960, 1260 ...
-  // So in the first ~30s of play (~100 cells absorbed) the player sees
-  // at most one or two chests, and chests get rarer as the run goes on.
-  return 60 + (level - 1) * 40;
+  // XP needed to reach the *next* level. Geometric (1.6x per level) so
+  // each level requires meaningfully more cells than the last:
+  //   L1->L2:   80    L2->L3:  128    L3->L4:  205    L4->L5:  328
+  //   L5->L6:  524    L6->L7:  839    L7->L8: 1343    L8->L9: 2148
+  // Cumulative: 80, 208, 413, 741, 1265, 2104, 3447, 5595
+  // First chest is genuinely earned (~30s of decent play) and late-run
+  // levels are rare — the player gets to *use* their perks instead of
+  // constantly being interrupted by another chest reveal.
+  return Math.round(80 * Math.pow(1.6, level - 1));
 };
 
 FrenzyGame.prototype.newGame = function () {
