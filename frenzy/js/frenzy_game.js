@@ -61,20 +61,27 @@ FrenzyGame.PERKS = [
   { id: "rainbow", name: "Rainbow",  icon: "🌈", blurb: "Every 6th pick clears that color everywhere", maxLevel: 1 } // 🌈
 ];
 
-// Scratch-card symbol pool. A real card draws 9 of these into a 3x3 grid
-// (one per cell, each cell rolled independently) and the prize is
-// determined by the most-common symbol after the player scratches off
-// the silver. `base` is the prize amount when 3-of-a-kind hits;
-// 4-of-a-kind doubles, 5-of-a-kind triples, etc. 2-of-a-kind pays a
-// fraction. 0/1 matches falls back to a small consolation prize.
+// Scratch-card symbol pool. A card draws 9 of these into a 3x3 grid
+// (each cell rolled independently) and the prize is determined by the
+// most-common symbol AFTER the player scratches off the silver.
+//
+// Variance is the point: weights are roughly even so 3-of-a-kind is
+// genuinely rare for any given symbol, and 2-of-a-kind is now a BUST
+// (no consolation). When 3+ does land, the payouts are big — they
+// have to be, since most cards bust. Rough probabilities:
+//   ~25-35% of cards have 3+ of any symbol (a real win)
+//   ~5-10% of those land on a rare/epic/jackpot symbol
+//   the rest bust with +0
 FrenzyGame.SCRATCH_SYMBOLS = [
-  { id: "cherry",  icon: "🍒", weight: 28, base: 100,  kind: "score", flair: "common"   },
-  { id: "seven",   icon: "7️⃣", weight: 22, base: 250,  kind: "score", flair: "common"   },
-  { id: "gold",    icon: "💰", weight: 20, base: 500,  kind: "score", flair: "uncommon" },
-  { id: "star",    icon: "⭐", weight: 14, base: 1000, kind: "score", flair: "rare"     },
-  { id: "clock",   icon: "⏱️", weight: 6,  base: 30,   kind: "time",  flair: "rare"     },
-  { id: "gift",    icon: "🎁", weight: 6,  base: 1,    kind: "perk",  flair: "epic"     },
-  { id: "diamond", icon: "💎", weight: 4,  base: 2500, kind: "score", flair: "jackpot"  }
+  { id: "cherry",  icon: "🍒", weight: 16, base: 200,  kind: "score", flair: "common"   },
+  { id: "seven",   icon: "7️⃣", weight: 15, base: 500,  kind: "score", flair: "common"   },
+  { id: "lemon",   icon: "🍋", weight: 14, base: 350,  kind: "score", flair: "common"   },
+  { id: "bell",    icon: "🔔", weight: 13, base: 800,  kind: "score", flair: "uncommon" },
+  { id: "gold",    icon: "💰", weight: 11, base: 1500, kind: "score", flair: "uncommon" },
+  { id: "star",    icon: "⭐", weight: 10, base: 3000, kind: "score", flair: "rare"     },
+  { id: "clock",   icon: "⏱️", weight: 8,  base: 60,   kind: "time",  flair: "rare"     },
+  { id: "gift",    icon: "🎁", weight: 7,  base: 1,    kind: "perk",  flair: "epic"     },
+  { id: "diamond", icon: "💎", weight: 6,  base: 7500, kind: "score", flair: "jackpot"  }
 ];
 
 FrenzyGame.prototype.boot = function () {
@@ -88,7 +95,16 @@ FrenzyGame.prototype.boot = function () {
   this.actuator.updateTimer(this.state.timeLeftMs);
   this.actuator.updateLevel(1);
   this.actuator.updateXp(0, this.state.xpToLevel);
+  this.refreshHints();
   this.startLoop();
+};
+
+// Recompute the per-color preview counts and push them to the picker.
+// Called whenever cells change: after pick / aura / churn / wave clear.
+FrenzyGame.prototype.refreshHints = function () {
+  if (!this.actuator.updatePickerHints) return;
+  var info = this.computePickerHints();
+  this.actuator.updatePickerHints(info.counts, info.best, this.currentColor());
 };
 
 FrenzyGame.prototype._configuredRunMs = function () {
@@ -254,6 +270,53 @@ FrenzyGame.prototype.tick = function (dtMs, nowMs) {
 
 FrenzyGame.prototype.currentColor = function () {
   return this.state.cells[this.startCell.x][this.startCell.y];
+};
+
+// Preview how many cells would be absorbed if `color` were picked
+// right now. Doesn't mutate state. Used by the actuator to render a
+// per-button "best color" hint on the picker so pattern recognition
+// becomes the gameplay loop instead of mashing.
+FrenzyGame.prototype.previewAbsorb = function (color) {
+  if (color === this.currentColor()) return 0;
+  var oldRegion = {};
+  this.region().forEach(function (p) { oldRegion[p[0] + "," + p[1]] = true; });
+  // Walk a virtual board where every old-region cell is treated as the
+  // chosen color, then BFS from the start cell. Anything reachable that
+  // wasn't in the old region is a newly-absorbed cell.
+  var size = this.size;
+  var cells = this.state.cells;
+  var seen = {};
+  var stack = [[this.startCell.x, this.startCell.y]];
+  var count = 0;
+  while (stack.length) {
+    var p = stack.pop();
+    var x = p[0], y = p[1];
+    if (x < 0 || x >= size || y < 0 || y >= size) continue;
+    var key = x + "," + y;
+    if (seen[key]) continue;
+    var inOld = oldRegion[key];
+    var effective = inOld ? color : cells[x][y];
+    if (effective !== color) continue;
+    seen[key] = true;
+    if (!inOld) count++;
+    stack.push([x + 1, y]); stack.push([x - 1, y]);
+    stack.push([x, y + 1]); stack.push([x, y - 1]);
+  }
+  return count;
+};
+
+// Compute previewAbsorb for every color, return { counts: [...], best }.
+// Best is the color with the largest count (or null if all are 0).
+FrenzyGame.prototype.computePickerHints = function () {
+  var counts = [];
+  var best = -1;
+  var bestCount = 0;
+  for (var c = 0; c < this.colorCount; c++) {
+    var n = this.previewAbsorb(c);
+    counts.push(n);
+    if (n > bestCount) { bestCount = n; best = c; }
+  }
+  return { counts: counts, best: best };
 };
 
 FrenzyGame.prototype.region = function () {
@@ -455,6 +518,7 @@ FrenzyGame.prototype.pick = function (color) {
   }
 
   this.gainXp(absorbed.length);
+  this.refreshHints();
 };
 
 FrenzyGame.prototype.grantScratchCard = function () {
@@ -481,11 +545,11 @@ FrenzyGame.prototype._rollScratchSymbols = function () {
   return grid;
 };
 
-// Score a scratch card from its 9 symbols. The most-common symbol wins:
-//   - 3+ of a kind: full reward, multiplied by (count - 2) so 3=1x, 4=2x ...
-//   - 2 of a kind:  fractional reward (30%)
-//   - 0/1 matches:  flat consolation (+50)
-// Ties on count broken by rarity (lowest weight wins).
+// Score a scratch card from its 9 symbols. High-variance:
+//   3+ of a kind:  full reward scaled by (count - 2), capped at 3x
+//   0/1/2 matches: BUST (no payout)
+// Ties on count broken by rarity (lowest weight wins) so a card with
+// 3 cherries AND 3 stars pays the star.
 FrenzyGame.prototype._scoreScratch = function (symbols) {
   var counts = {};
   symbols.forEach(function (s) { counts[s.id] = (counts[s.id] || 0) + 1; });
@@ -493,6 +557,7 @@ FrenzyGame.prototype._scoreScratch = function (symbols) {
   var best = null;
   pool.forEach(function (sym) {
     var n = counts[sym.id] || 0;
+    if (n < 3) return; // below the win threshold
     if (!best ||
         n > best.count ||
         (n === best.count && sym.weight < best.sym.weight)) {
@@ -500,8 +565,8 @@ FrenzyGame.prototype._scoreScratch = function (symbols) {
     }
   });
 
-  if (best.count >= 3) {
-    var mul = best.count - 2;
+  if (best) {
+    var mul = Math.min(3, best.count - 2);
     if (best.sym.kind === "score") {
       return { kind: "score", amount: best.sym.base * mul,
                label: "+" + (best.sym.base * mul),
@@ -517,24 +582,16 @@ FrenzyGame.prototype._scoreScratch = function (symbols) {
                matchSymbolId: best.sym.id, matchCount: best.count, flair: best.sym.flair };
     }
   }
-  if (best.count === 2) {
-    if (best.sym.kind === "score") {
-      var amt = Math.round(best.sym.base * 0.3);
-      return { kind: "score", amount: amt, label: "+" + amt,
-               matchSymbolId: best.sym.id, matchCount: 2, flair: "common" };
-    }
-    if (best.sym.kind === "time") {
-      var t = Math.max(5, Math.round(best.sym.base * 0.3));
-      return { kind: "time", amount: t, label: "+" + t + "s",
-               matchSymbolId: best.sym.id, matchCount: 2, flair: "common" };
-    }
-    // 2 perks pays a flat score consolation (free perk with N=2 felt
-    // too generous given how easy 2-of-a-kind is to roll).
-    return { kind: "score", amount: 100, label: "+100",
-             matchSymbolId: null, matchCount: 0, flair: "common" };
-  }
-  return { kind: "score", amount: 50, label: "+50",
-           matchSymbolId: null, matchCount: 0, flair: "common" };
+  // Bust. Find which symbol came closest so we can show "Almost — 2 X"
+  // on the card UI as a near-miss tease, but no payout.
+  var nearMiss = null;
+  pool.forEach(function (sym) {
+    var n = counts[sym.id] || 0;
+    if (!nearMiss || n > nearMiss.count) nearMiss = { sym: sym, count: n };
+  });
+  return { kind: "bust", amount: 0, label: "BUST",
+           matchSymbolId: nearMiss ? nearMiss.sym.id : null,
+           matchCount: nearMiss ? nearMiss.count : 0, flair: "bust" };
 };
 
 FrenzyGame.prototype.openScratchCard = function () {
@@ -697,6 +754,7 @@ FrenzyGame.prototype.completeWave = function () {
   this.actuator.renderBoard(this.state, this.size, this.startCell, this.region());
   this.actuator.updateWave(this.state.wave);
   this.actuator.updateScore(this.state.score);
+  this.refreshHints();
 
   // Wave-clear scratch drop. Base 30%, bumps slightly per wave so the
   // player keeps getting cards as the run goes on.
@@ -718,13 +776,16 @@ FrenzyGame.prototype.churnEdges = function () {
     var k = perim[i][0] + "," + perim[i][1];
     if (!regionSet[k]) candidates.push(perim[i]);
   }
+  var changed = false;
   for (var n = 0; n < this.churnCount && candidates.length > 0; n++) {
     var idx = Math.floor(Math.random() * candidates.length);
     var c = candidates.splice(idx, 1)[0];
     var newColor = Math.floor(Math.random() * this.colorCount);
     this.state.cells[c[0]][c[1]] = newColor;
     this.actuator.churnCell(c[0], c[1], newColor);
+    changed = true;
   }
+  if (changed) this.refreshHints();
 };
 
 FrenzyGame.prototype.spawnBounty = function () {
@@ -822,6 +883,7 @@ FrenzyGame.prototype.triggerAura = function () {
   this.actuator.updateScore(this.state.score);
   this.actuator.updateCombo(this.state.combo, comboMul * multBonus);
   this.gainXp(1);
+  this.refreshHints();
 };
 
 FrenzyGame.prototype.endRun = function () {

@@ -419,6 +419,44 @@
   transform: scale(0.92);
   filter: brightness(1.3);
 }
+
+/* Best-color hint: a strong glow ring + slow breathing animation so the
+   player can see at a glance which color absorbs the most cells right
+   now. The pattern-recognition loop is "watch the glow shift between
+   buttons as the board changes, decide whether to chase the best
+   absorb or detour for a bounty / hot cell". */
+@keyframes picker-best-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(255,255,255,0.85), 0 0 14px rgba(255,255,255,0.6),
+                         0 4px 8px rgba(0,0,0,0.4), inset 0 -3px 0 rgba(0,0,0,0.18); }
+  50%      { box-shadow: 0 0 0 4px rgba(255,255,255,1.0), 0 0 22px rgba(255,255,255,0.9),
+                         0 4px 8px rgba(0,0,0,0.4), inset 0 -3px 0 rgba(0,0,0,0.18); }
+}
+.frenzy-color-btn.is-best:not(.is-current) {
+  animation: picker-best-pulse 1.1s ease-in-out infinite;
+  z-index: 1;
+}
+
+/* Per-button absorb-count badge in the top-right corner. Subtle so it
+   reads as "info" rather than "directive" — the glow on .is-best is
+   the louder signal. */
+.frenzy-color-btn .picker-hint {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 12px;
+  font-weight: bold;
+  color: rgba(255,255,255,0.95);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+  pointer-events: none;
+  font-family: "Helvetica Neue", Arial, sans-serif;
+  line-height: 1;
+}
+.frenzy-color-btn.is-best .picker-hint {
+  color: #1a1430;
+  background: rgba(255,255,255,0.95);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
 @keyframes pick-pulse {
   0%   { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(255,255,255,0.8); }
   60%  { transform: scale(1.08); box-shadow: 0 0 0 14px rgba(255,255,255,0); }
@@ -845,6 +883,22 @@
 .scratch-overlay.flair-jackpot .scratch-card { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px #f5c542, 0 0 30px rgba(245,197,66,0.6); }
 .scratch-overlay.flair-epic    .scratch-card { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px #b066d3, 0 0 24px rgba(176,102,211,0.55); }
 .scratch-overlay.flair-rare    .scratch-card { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px #5b8def; }
+.scratch-overlay.flair-bust    .scratch-card { box-shadow: 0 20px 60px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.15); }
+
+/* Bust state: the prize text reads BUST in muted gray instead of the
+   golden gradient. No celebration. The claim button is still pulsing
+   green so the player can dismiss the card cleanly. */
+.scratch-result.is-bust .scratch-result-prize {
+  background: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  color: rgba(255,255,255,0.5);
+  text-shadow: none;
+  letter-spacing: 0.18em;
+}
+.scratch-result.is-bust .scratch-result-line {
+  color: rgba(255,255,255,0.55);
+}
 .scratch-overlay.flair-jackpot .scratch-result-prize {
   animation: jackpot-pulse 700ms ease-in-out infinite;
   font-size: 44px;

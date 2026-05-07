@@ -502,6 +502,33 @@ FrenzyActuator.prototype.markCurrentColor = function (color) {
   }
 };
 
+// Update each color picker button with a "would absorb N cells" hint
+// and highlight the best non-current color. Pattern recognition is the
+// loop: the player can see at a glance which color would scoop up the
+// most cells right now, and choose to take it or detour for a bounty.
+FrenzyActuator.prototype.updatePickerHints = function (counts, bestIdx, currentColor) {
+  if (!this.pickerEl) return;
+  var btns = this.pickerEl.querySelectorAll(".frenzy-color-btn");
+  for (var i = 0; i < btns.length; i++) {
+    var btn = btns[i];
+    var n = counts[i];
+    btn.classList.toggle("is-best", i === bestIdx && n > 0);
+    // Maintain a small badge child showing the absorb count. Hide the
+    // badge for the current (no-op) color and for zero-count picks.
+    var badge = btn.querySelector(".picker-hint");
+    if (i === currentColor || n <= 0) {
+      if (badge && badge.parentNode) badge.parentNode.removeChild(badge);
+      continue;
+    }
+    if (!badge) {
+      badge = document.createElement("span");
+      badge.className = "picker-hint";
+      btn.appendChild(badge);
+    }
+    badge.textContent = n;
+  }
+};
+
 // --------------------------------------------------- game over / continue
 
 FrenzyActuator.prototype.continueGame = function () {
@@ -802,16 +829,23 @@ FrenzyActuator.prototype.showScratchCard = function (symbols, reward, onClaim) {
     if (hint) hint.classList.add("is-hidden");
     setTimeout(function () {
       resultEl.classList.remove("is-hidden");
-      if (reward.matchCount >= 3) {
-        resultLine.textContent = reward.matchCount + "× " +
-          (FrenzyGame.SCRATCH_SYMBOLS.find(function (s) { return s.id === reward.matchSymbolId; }) || {}).icon +
-          "  MATCH!";
-      } else if (reward.matchCount === 2) {
-        resultLine.textContent = "Pair only — small prize";
+      var sym = FrenzyGame.SCRATCH_SYMBOLS.find(function (s) {
+        return s.id === reward.matchSymbolId;
+      });
+      if (reward.kind === "bust") {
+        resultEl.classList.add("is-bust");
+        if (sym && reward.matchCount === 2) {
+          resultLine.textContent = "Almost! 2× " + sym.icon;
+        } else {
+          resultLine.textContent = "No matches";
+        }
+        resultPrize.textContent = "BUST";
       } else {
-        resultLine.textContent = "No matches";
+        resultEl.classList.remove("is-bust");
+        resultLine.textContent = reward.matchCount + "× " +
+          (sym ? sym.icon : "") + "  MATCH!";
+        resultPrize.textContent = reward.label;
       }
-      resultPrize.textContent = reward.label;
     }, 480);
   }
 
